@@ -1,0 +1,959 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <title>여러 가지 일차 부등식의 풀이</title>
+  <!-- MathJax 로드 (LaTeX 렌더링) -->
+  <script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js" defer></script>
+
+  <style>
+    body {
+      font-family: '맑은 고딕', sans-serif;
+      margin: 30px;
+      line-height: 1.6;
+    }
+    h1, h2, h3 {
+      margin-bottom: 1rem;
+    }
+    .hidden {
+      display: none;
+    }
+    .center {
+      text-align: center;
+    }
+    /* 난이도 선택 등 초기화면 */
+    #start-screen, #quiz-screen, #end-screen {
+      border: 1px solid #ccc;
+      border-radius: 6px;
+      padding: 20px;
+      margin-bottom: 20px;
+    }
+    /* 에너지바 */
+    #energy-bar-container {
+      width: 100%;
+      height: 20px;
+      background: #eee;
+      border: 1px solid #ccc;
+      border-radius: 4px;
+      margin: 10px 0;
+      overflow: hidden;
+      position: relative;
+    }
+    #energy-bar {
+      height: 100%;
+      background: linear-gradient(90deg, #ff9999, #ff0000);
+      width: 100%;
+      transition: width 0.2s linear;
+    }
+    /* 보기 선택 */
+    .option-btn {
+      display: block;
+      margin: 8px 0;
+      padding: 8px;
+      background: #f5f5f5;
+      border: 1px solid #ddd;
+      border-radius: 4px;
+      cursor: pointer;
+      text-align: left;
+    }
+    .option-btn:hover {
+      background: #eaeaea;
+    }
+    /* 전체 게임 시간 표시 */
+    #total-time {
+      font-weight: bold;
+      margin-top: 10px;
+    }
+    /* 정답/오답 표시 */
+    #feedback {
+      margin-top: 10px;
+      font-weight: bold;
+    }
+    /* 남은 기회 */
+    #chances {
+      font-weight: bold;
+      margin-left: 20px;
+    }
+    /* 점수 */
+    #score-span {
+      font-weight: bold;
+      margin-left: 20px;
+    }
+    /* 반응영역 */
+    #response {
+      white-space: pre-wrap;
+      margin-top: 10px;
+      color: #333;
+      background: #fafafa;
+      border: 1px dashed #ccc;
+      padding: 10px;
+      border-radius: 4px;
+    }
+  </style>
+</head>
+
+<body>
+
+<h1>여러 가지 일차 부등식의 풀이</h1>
+
+<div id="start-screen">
+  <h2>게임 시작</h2>
+  <p>이름을 입력하고 난이도를 선택하세요.</p>
+  <div>
+    <label for="playerName">이름: </label>
+    <input type="text" id="playerName" placeholder="이름 입력" />
+  </div>
+  <div style="margin-top:10px;">
+    <label>난이도 선택: </label>
+    <select id="difficultySelect">
+      <option value="최상">최상 (20초/문제, +20점)</option>
+      <option value="상">상 (30초/문제, +15점)</option>
+      <option value="중">중 (40초/문제, +13점)</option>
+      <option value="하">하 (시간제한 없음, +10점)</option>
+    </select>
+  </div>
+  <button style="margin-top:20px; padding:10px 20px;" onclick="startGame()">시작하기</button>
+</div>
+
+<div id="quiz-screen" class="hidden">
+  <h2>문제 풀기</h2>
+  
+  <!-- 상단 정보 -->
+  <div>
+    <span id="score-span">점수: 0</span>
+    <span id="chances">남은 기회: 3</span>
+    <span id="total-time">전체 진행 시간: 0초</span>
+  </div>
+
+  <!-- 문제 표시 영역 -->
+  <div id="question-container" style="margin-top:20px;">
+    <div id="problem-text" style="font-size:1.1rem; margin-bottom:15px;"></div>
+
+    <!-- 보기(4지선다) 버튼 -->
+    <div id="options-container"></div>
+
+    <!-- 피드백(정답/오답) -->
+    <div id="feedback"></div>
+  </div>
+
+  <!-- 에너지바 (시간제한 시각화) -->
+  <div id="energy-bar-container" class="hidden">
+    <div id="energy-bar"></div>
+  </div>
+</div>
+
+<div id="end-screen" class="hidden center">
+  <h2 id="end-message">게임 종료</h2>
+  <p>최종 점수: <span id="final-score"></span></p>
+  <p>총 소요 시간: <span id="final-time"></span></p>
+
+  <!-- 점수 전송 영역 -->
+  <button onclick="sendScore()" style="margin:10px 0;padding:8px 16px;">점수 전송</button>
+  <div id="response"></div>
+</div>
+
+<script>
+/* 
+  ===========================
+  1) 문제 데이터 (1~50)
+  ===========================
+  각 문제를 객체 형태로 저장:
+    {
+      question: "질문(LaTeX 포함)",
+      answers: ["보기1(LaTeX)", "보기2(LaTeX)", "보기3(LaTeX)", "보기4(LaTeX)"],
+      correctIndex: 정답인 보기의 인덱스(0~3)
+    }
+
+  주의: 
+  - 수식은 \\(...\\) 형태로 작성.
+  - 슬래시/중괄호 등 MathJax에서 요구하는 문법에 주의.
+  - correctIndex는 0~3 중 하나.
+*/
+const PROBLEMS = [
+  {
+    question: "부등식 \\(3x + 2(4 - x) \\le 2\\) 의 해를 고르시오.",
+    answers: [
+      "\\(x \\le -6\\)",
+      "\\(x \\ge -6\\)",
+      "\\(x > -2\\)",
+      "\\(\\text{모든 실수}\\)"
+    ],
+    correctIndex: 0
+  },
+  {
+    question: "부등식 \\(2(x - 1) \\ge x - 4\\) 의 해를 고르시오.",
+    answers: [
+      "\\(x \\le -4\\)",
+      "\\(x \\ge -2\\)",
+      "\\(x > 2\\)",
+      "\\(x < 0\\)"
+    ],
+    correctIndex: 1
+  },
+  {
+    question: "부등식 \\(3(x - 4) < -x\\) 의 해를 고르시오.",
+    answers: [
+      "\\(x > 3\\)",
+      "\\(x \\ge -3\\)",
+      "\\(x < 3\\)",
+      "\\(x \\le -12\\)"
+    ],
+    correctIndex: 2
+  },
+  {
+    question: "부등식 \\(7x - 4 \\le 2(x + 3)\\) 의 해를 고르시오.",
+    answers: [
+      "\\(x \\ge 2\\)",
+      "\\(x < -2\\)",
+      "\\(x > 0\\)",
+      "\\(x \\le 2\\)"
+    ],
+    correctIndex: 3
+  },
+  {
+    question: "부등식 \\(3x - 1 > 2(x - 3) + 5\\) 의 해를 고르시오.",
+    answers: [
+      "\\(x > 0\\)",
+      "\\(x \\le 0\\)",
+      "\\(x \\ge 4\\)",
+      "\\(\\text{모든 실수}\\)"
+    ],
+    correctIndex: 0
+  },
+  {
+    question: "부등식 \\(-3(x - 1) > 4(x - 2)\\) 의 해를 고르시오.",
+    answers: [
+      "\\(x < \\tfrac{11}{7}\\)",
+      "\\(x > \\tfrac{11}{7}\\)",
+      "\\(x \\ge 2\\)",
+      "\\(x \\le 1\\)"
+    ],
+    correctIndex: 0
+  },
+  {
+    question: "부등식 \\(5(x - 1) + 3 \\le 3(x + 3) - 5\\) 의 해를 고르시오.",
+    answers: [
+      "\\(x > 3\\)",
+      "\\(x \\ge -3\\)",
+      "\\(x \\le 1\\)",
+      "\\(x \\le 3\\)"
+    ],
+    correctIndex: 3
+  },
+  {
+    question: "부등식 \\(-2(x - 4) + 1 \\ge 3(2x - 3) + 2\\) 의 해를 고르시오.",
+    answers: [
+      "\\(x \\ge 4\\)",
+      "\\(x \\le 2\\)",
+      "\\(\\text{모든 실수}\\)",
+      "\\(x > -2\\)"
+    ],
+    correctIndex: 1
+  },
+  {
+    question: "부등식 \\(-(3x + 5) \\le 4(2x - 9) - 2\\) 의 해를 고르시오.",
+    answers: [
+      "\\(x \\le 1\\)",
+      "\\(x > 5\\)",
+      "\\(x \\ge 3\\)",
+      "\\(x < 3\\)"
+    ],
+    correctIndex: 2
+  },
+  {
+    question: "부등식 \\(6x - (3x + 1) > 2\\) 의 해를 고르시오.",
+    answers: [
+      "\\(x > 1\\)",
+      "\\(x \\le 1\\)",
+      "\\(x < -1\\)",
+      "\\(x \\ge 4\\)"
+    ],
+    correctIndex: 0
+  },
+  {
+    question: "부등식 \\(4(x - 3) > 8\\) 의 해를 고르시오.",
+    answers: [
+      "\\(x < 5\\)",
+      "\\(x > 5\\)",
+      "\\(x \\ge 2\\)",
+      "\\(x \\le 2\\)"
+    ],
+    correctIndex: 1
+  },
+  {
+    question: "부등식 \\(3(2 - x) + 4 \\le 1\\) 의 해를 고르시오.",
+    answers: [
+      "\\(x \\le -3\\)",
+      "\\(\\text{모든 실수}\\)",
+      "\\(x < 2\\)",
+      "\\(x \\ge 3\\)"
+    ],
+    correctIndex: 3
+  },
+  {
+    question: "부등식 \\(2(x + 3) < 7x - 4\\) 의 해를 고르시오.",
+    answers: [
+      "\\(x > 2\\)",
+      "\\(x < 2\\)",
+      "\\(x \\le -2\\)",
+      "\\(x \\ge 4\\)"
+    ],
+    correctIndex: 0
+  },
+  {
+    question: "부등식 \\(3x - 2 \\ge -(x - 10)\\) 의 해를 고르시오.",
+    answers: [
+      "\\(x \\le -3\\)",
+      "\\(x \\ge 3\\)",
+      "\\(x < 3\\)",
+      "\\(\\text{모든 실수}\\)"
+    ],
+    correctIndex: 1
+  },
+  {
+    question: "부등식 \\(2(4x + 1) - 2x \\ge 5x + 3\\) 의 해를 고르시오.",
+    answers: [
+      "\\(x < -1\\)",
+      "\\(x \\le 1\\)",
+      "\\(x \\ge 1\\)",
+      "\\(x > 3\\)"
+    ],
+    correctIndex: 2
+  },
+  {
+    question: "부등식 \\(3(2x + 3) \\ge 5x + 7\\) 의 해를 고르시오.",
+    answers: [
+      "\\(x \\le -2\\)",
+      "\\(x < -2\\)",
+      "\\(x \\ge 0\\)",
+      "\\(x \\ge -2\\)"
+    ],
+    correctIndex: 3
+  },
+  {
+    question: "부등식 \\(-3(x - 2) > x - 10\\) 의 해를 고르시오.",
+    answers: [
+      "\\(x < 4\\)",
+      "\\(x \\le -4\\)",
+      "\\(x > 4\\)",
+      "\\(\\text{모든 실수}\\)"
+    ],
+    correctIndex: 0
+  },
+  {
+    question: "부등식 \\(3(x + 2) > 2(2x + 5) + 1\\) 의 해를 고르시오.",
+    answers: [
+      "\\(x \\ge -5\\)",
+      "\\(x < -5\\)",
+      "\\(x = -5\\)",
+      "\\(x > 5\\)"
+    ],
+    correctIndex: 1
+  },
+  {
+    question: "부등식 \\(2 - 4(3 + 2x) \\ge -3x\\) 의 해를 고르시오.",
+    answers: [
+      "\\(x > 2\\)",
+      "\\(x \\ge -2\\)",
+      "\\(x \\le -2\\)",
+      "\\(\\text{모든 실수}\\)"
+    ],
+    correctIndex: 2
+  },
+  {
+    question: "부등식 \\(3(x - 2) - 2(5 - x) < x\\) 의 해를 고르시오.",
+    answers: [
+      "\\(x > 4\\)",
+      "\\(x \\le -4\\)",
+      "\\(\\text{모든 실수}\\)",
+      "\\(x < 4\\)"
+    ],
+    correctIndex: 3
+  },
+  {
+    question: "부등식 \\(3(x + 2) \\ge 8x + 7\\) 의 해를 고르시오.",
+    answers: [
+      "\\(x \\le -\\tfrac{1}{5}\\)",
+      "\\(x < -1\\)",
+      "\\(x \\ge 0\\)",
+      "\\(x > \\tfrac{1}{5}\\)"
+    ],
+    correctIndex: 0
+  },
+  {
+    question: "부등식 \\(2(3x - 6) > 3(2 - x)\\) 의 해를 고르시오.",
+    answers: [
+      "\\(x \\le 2\\)",
+      "\\(x > 2\\)",
+      "\\(x \\ge -2\\)",
+      "\\(\\text{모든 실수}\\)"
+    ],
+    correctIndex: 1
+  },
+  {
+    question: "부등식 \\(3(x + 1) > 2(2x + 5) + 1\\) 의 해를 고르시오.",
+    answers: [
+      "\\(x \\ge 8\\)",
+      "\\(x = -8\\)",
+      "\\(x < -8\\)",
+      "\\(x > 8\\)"
+    ],
+    correctIndex: 2
+  },
+  {
+    question: "부등식 \\(\\frac{x - 2}{2} > \\frac{3}{4}x + \\tfrac{1}{4}\\) 의 해를 고르시오.",
+    answers: [
+      "\\(x > -1\\)",
+      "\\(x \\le -10\\)",
+      "\\(x = -5\\)",
+      "\\(x < -5\\)"
+    ],
+    correctIndex: 3
+  },
+  {
+    question: "부등식 \\(\\frac{2x - 5}{3} \\ge 3\\) 의 해를 고르시오.",
+    answers: [
+      "\\(x \\ge 7\\)",
+      "\\(x < 7\\)",
+      "\\(x \\le 3\\)",
+      "\\(\\text{모든 실수}\\)"
+    ],
+    correctIndex: 0
+  },
+  {
+    question: "부등식 \\(\\tfrac{1}{3}x < \\tfrac{3}{4}x + \\tfrac{5}{6}\\) 의 해를 고르시오.",
+    answers: [
+      "\\(x < -2\\)",
+      "\\(x > -2\\)",
+      "\\(\\text{모든 실수}\\)",
+      "\\(x \\ge 2\\)"
+    ],
+    correctIndex: 1
+  },
+  {
+    question: "부등식 \\(\\frac{x - 1}{3} < \\frac{2x + 3}{5}\\) 의 해를 고르시오.",
+    answers: [
+      "\\(x \\le -14\\)",
+      "\\(x = -14\\)",
+      "\\(x > -14\\)",
+      "\\(x < 14\\)"
+    ],
+    correctIndex: 2
+  },
+  {
+    question: "부등식 \\(\\frac{2}{3}x - \\tfrac{1}{2} \\ge \\tfrac{5}{6}x + \\tfrac{1}{3}\\) 의 해를 고르시오.",
+    answers: [
+      "\\(x > 5\\)",
+      "\\(x < -5\\)",
+      "\\(x \\ge 0\\)",
+      "\\(x \\le -5\\)"
+    ],
+    correctIndex: 3
+  },
+  {
+    question: "부등식 \\(\\tfrac{2}{3}x - \\tfrac{5}{6} < \\tfrac{5}{8}x - \\tfrac{1}{2}\\) 의 해를 고르시오.",
+    answers: [
+      "\\(x < 8\\)",
+      "\\(x > 8\\)",
+      "\\(x \\le -8\\)",
+      "\\(\\text{모든 실수}\\)"
+    ],
+    correctIndex: 0
+  },
+  {
+    question: "부등식 \\(\\tfrac{1}{2}x + 7 > \\tfrac{1}{5}x + 4\\) 의 해를 고르시오.",
+    answers: [
+      "\\(\\text{모든 실수}\\)",
+      "\\(x > -10\\)",
+      "\\(x \\le -10\\)",
+      "\\(x \\ge 10\\)"
+    ],
+    correctIndex: 1
+  },
+  {
+    question: "부등식 \\(3 - \\tfrac{1}{6}x \\ge -(\\tfrac{2}{3}x - \\tfrac{3}{2})\\) 의 해를 고르시오.",
+    answers: [
+      "\\(x \\le -3\\)",
+      "\\(\\text{모든 실수}\\)",
+      "\\(x \\ge -3\\)",
+      "\\(x > 3\\)"
+    ],
+    correctIndex: 2
+  },
+  {
+    question: "부등식 \\(\\frac{x+5}{2} - \\frac{x-1}{3} \\le \\frac{x+3}{4}\\) 의 해를 고르시오.",
+    answers: [
+      "\\(x \\le -25\\)",
+      "\\(x > -25\\)",
+      "\\(x \\le 5\\)",
+      "\\(x \\ge 25\\)"
+    ],
+    correctIndex: 3
+  },
+  {
+    question: "부등식 \\(\\tfrac{4x + 2}{3} \\le \\tfrac{x - 2}{2}\\) 의 해를 고르시오.",
+    answers: [
+      "\\(x \\le -2\\)",
+      "\\(x \\ge 2\\)",
+      "\\(x < -1\\)",
+      "\\(\\text{모든 실수}\\)"
+    ],
+    correctIndex: 0
+  },
+  {
+    question: "부등식 \\(-\\tfrac{x - 4}{2} \\le \\tfrac{3x - 1}{5}\\) 의 해를 고르시오.",
+    answers: [
+      "\\(x < 2\\)",
+      "\\(x \\ge 2\\)",
+      "\\(x \\le -2\\)",
+      "\\(x \\ge 0\\)"
+    ],
+    correctIndex: 1
+  },
+  {
+    question: "부등식 \\(\\tfrac{x - 1}{2} > \\tfrac{1}{3}x + \\tfrac{1}{2}\\) 의 해를 고르시오.",
+    answers: [
+      "\\(x < 6\\)",
+      "\\(x \\le 6\\)",
+      "\\(x > 6\\)",
+      "\\(\\text{모든 실수}\\)"
+    ],
+    correctIndex: 2
+  },
+  {
+    question: "부등식 \\(\\tfrac{x + 3}{2} > \\tfrac{3}{5}x - 1\\) 의 해를 고르시오.",
+    answers: [
+      "\\(x \\ge 25\\)",
+      "\\(x \\le -25\\)",
+      "\\(x < -5\\)",
+      "\\(x < 25\\)"
+    ],
+    correctIndex: 3
+  },
+  {
+    question: "부등식 \\(\\tfrac{1}{2}x - 3 \\le -\\tfrac{2}{3}x - 4\\) 의 해를 고르시오.",
+    answers: [
+      "\\(x \\le -\\tfrac{6}{7}\\)",
+      "\\(x \\ge 0\\)",
+      "\\(x > \\tfrac{6}{7}\\)",
+      "\\(\\text{모든 실수}\\)"
+    ],
+    correctIndex: 0
+  },
+  {
+    question: "부등식 \\(\\tfrac{x - 2}{2} \\ge \\tfrac{4x + 1}{5}\\) 의 해를 고르시오.",
+    answers: [
+      "\\(x > -4\\)",
+      "\\(x \\le -4\\)",
+      "\\(x \\ge 4\\)",
+      "\\(x < -1\\)"
+    ],
+    correctIndex: 1
+  },
+  {
+    question: "부등식 \\(\\tfrac{3}{4}x + \\tfrac{2}{3} \\le \\tfrac{5}{6}x\\) 의 해를 고르시오.",
+    answers: [
+      "\\(x < 8\\)",
+      "\\(\\text{모든 실수}\\)",
+      "\\(x \\ge 8\\)",
+      "\\(x > -8\\)"
+    ],
+    correctIndex: 2
+  },
+  {
+    question: "부등식 \\(\\tfrac{x}{3} - \\tfrac{x - 5}{2} > 4\\) 의 해를 고르시오.",
+    answers: [
+      "\\(x \\ge 9\\)",
+      "\\(x = -9\\)",
+      "\\(x > -9\\)",
+      "\\(x < -9\\)"
+    ],
+    correctIndex: 3
+  },
+  {
+    question: "부등식 \\(\\tfrac{1}{3}(x - 4) + 1 < 2(x - 1) + 5\\) 의 해를 고르시오.",
+    answers: [
+      "\\(x > -2\\)",
+      "\\(x < -2\\)",
+      "\\(\\text{모든 실수}\\)",
+      "\\(x \\ge 2\\)"
+    ],
+    correctIndex: 0
+  },
+  {
+    question: "부등식 \\(4 - \\tfrac{1}{10}x < \\tfrac{1}{5}x + 1\\) 의 해를 고르시오.",
+    answers: [
+      "\\(x \\le 10\\)",
+      "\\(x > 10\\)",
+      "\\(x < -10\\)",
+      "\\(\\text{모든 실수}\\)"
+    ],
+    correctIndex: 1
+  },
+  {
+    question: "부등식 \\(\\tfrac{x + 3}{2} + \\tfrac{x - 1}{6} \\ge \\tfrac{x + 2}{3}\\) 의 해를 고르시오.",
+    answers: [
+      "\\(x < -2\\)",
+      "\\(x \\le 2\\)",
+      "\\(x \\ge -2\\)",
+      "\\(\\text{모든 실수}\\)"
+    ],
+    correctIndex: 2
+  },
+  {
+    question: "부등식 \\(0.4x > 0.2x - 0.8\\) 의 해를 고르시오.",
+    answers: [
+      "\\(x \\le -4\\)",
+      "\\(x < 4\\)",
+      "\\(x \\ge 8\\)",
+      "\\(x > -4\\)"
+    ],
+    correctIndex: 3
+  },
+  {
+    question: "부등식 \\(-(x - 2) \\ge 0.6x + 0.4\\) 의 해를 고르시오.",
+    answers: [
+      "\\(x \\le 1\\)",
+      "\\(x \\ge 1\\)",
+      "\\(x = 1\\)",
+      "\\(x < -1\\)"
+    ],
+    correctIndex: 0
+  },
+  {
+    question: "부등식 \\(0.3x - 0.2 > 0.7x + 0.6\\) 의 해를 고르시오.",
+    answers: [
+      "\\(x \\ge -2\\)",
+      "\\(x < -2\\)",
+      "\\(x > 2\\)",
+      "\\(\\text{모든 실수}\\)"
+    ],
+    correctIndex: 1
+  },
+  {
+    question: "부등식 \\(0.5x + 0.2 \\ge 0.3x - 1.2\\) 의 해를 고르시오.",
+    answers: [
+      "\\(x \\le -7\\)",
+      "\\(\\text{모든 실수}\\)",
+      "\\(x \\ge -7\\)",
+      "\\(x > 0\\)"
+    ],
+    correctIndex: 2
+  },
+  {
+    question: "부등식 \\(0.02x - 0.07 \\ge 0.06x + 0.05\\) 의 해를 고르시오.",
+    answers: [
+      "\\(x > 3\\)",
+      "\\(x < -3\\)",
+      "\\(x = -3\\)",
+      "\\(x \\le -3\\)"
+    ],
+    correctIndex: 3
+  },
+  {
+    question: "부등식 \\(0.5(x + 9) < 6\\) 의 해를 고르시오.",
+    answers: [
+      "\\(x < 3\\)",
+      "\\(x > 3\\)",
+      "\\(x \\ge 6\\)",
+      "\\(x \\le -9\\)"
+    ],
+    correctIndex: 0
+  },
+  {
+    question: "부등식 \\(0.2x - 0.15 \\ge 0.08x - 0.09\\) 의 해를 고르시오.",
+    answers: [
+      "\\(x < 0.5\\)",
+      "\\(x \\ge 0.5\\)",
+      "\\(\\text{모든 실수}\\)",
+      "\\(x \\le -0.5\\)"
+    ],
+    correctIndex: 1
+  }
+];
+
+// 50문제 사용 후에도 계속 랜덤하게 문제를 낼 것이므로, 
+// 문제를 '소진'해도 다시 재사용 가능하되, 
+// 처음 50번은 중복없이, 그 이후 무한 반복.
+// => 간단하게: 문제를 무작위로 뽑되, 한 번씩 50개를 다 사용하면 다시 섞어서 무한반복.
+
+let usedIndices = [];   // 이미 출제된 문제 index 보관
+let totalAnswered = 0;  // 몇 문제를 풀었는지(정오 답 상관없이)
+let currentProblem = null; // 현재 문제정보
+let currentIndex = -1;     // 현재 문제의 인덱스
+let score = 0;             // 점수
+let chances = 3;           // 남은 기회
+let difficulty = "상";     // 난이도 (기본값: 상)
+let nameEntered = "";      // 플레이어 이름
+let timeLimitPerQuestion = 30; // 문제당 제한시간(초)
+let scorePerQuestion = 15;     // 문제당 점수
+
+// 전체 게임 시간 기록
+let totalTime = 0; 
+let totalTimeInterval = null;
+
+// 문제당 남은 시간(실제 숫자를 화면에 표시하지 않고 바 형태만 표시)
+let questionTime = 0; 
+let questionTimer = null;
+
+// 난이도별 설정
+function setDifficulty(diff) {
+  difficulty = diff;
+  if (diff === "최상") {
+    timeLimitPerQuestion = 20;
+    scorePerQuestion = 20;
+  } else if (diff === "상") {
+    timeLimitPerQuestion = 30;
+    scorePerQuestion = 15;
+  } else if (diff === "중") {
+    timeLimitPerQuestion = 40;
+    scorePerQuestion = 13;
+  } else {
+    // 하
+    timeLimitPerQuestion = Infinity; // 무제한
+    scorePerQuestion = 10;
+  }
+}
+
+// 시작화면 -> 게임 시작
+function startGame() {
+  const nameField = document.getElementById('playerName');
+  const diffSelect = document.getElementById('difficultySelect');
+
+  if (!nameField.value.trim()) {
+    alert("이름을 입력하세요.");
+    return;
+  }
+  nameEntered = nameField.value.trim();
+  setDifficulty(diffSelect.value);
+
+  // 화면 전환
+  document.getElementById('start-screen').classList.add('hidden');
+  document.getElementById('quiz-screen').classList.remove('hidden');
+
+  // 전체 시간 타이머 시작
+  totalTime = 0;
+  totalTimeInterval = setInterval(()=>{
+    totalTime++;
+    document.getElementById('total-time').innerText = "전체 진행 시간: " + totalTime + "초";
+  }, 1000);
+
+  // 첫 문제 로드
+  nextProblem();
+}
+
+// 문제 출제
+function nextProblem() {
+  document.getElementById('feedback').innerText = "";
+  // 에너지바 초기화
+  resetEnergyBar();
+
+  // 문제 인덱스 무작위 선택
+  // 처음 50문제 동안은 중복 없는 랜덤 -> usedIndices 체크
+  if (usedIndices.length < PROBLEMS.length) {
+    // 아직 50개 다 사용 안했다면 => 안나온 문제 중 랜덤
+    currentIndex = pickRandomUniqueIndex();
+  } else {
+    // 50문제 모두 소진 후 -> 무한 랜덤 (중복 허용)
+    currentIndex = Math.floor(Math.random() * PROBLEMS.length);
+  }
+
+  currentProblem = PROBLEMS[currentIndex];
+  totalAnswered++;
+
+  // 문제/보기 표시
+  document.getElementById('problem-text').innerHTML = currentProblem.question;
+  
+  // 보기 4개를 화면에 랜덤 순서로 배치하기 위해
+  // (보기 텍스트+실제정답여부)를 묶어서 섞은 뒤 표시
+  const options = shuffleOptions(currentProblem.answers, currentProblem.correctIndex);
+  const optionsContainer = document.getElementById('options-container');
+  optionsContainer.innerHTML = "";
+  options.forEach(opt => {
+    const btn = document.createElement('button');
+    btn.className = 'option-btn';
+    btn.innerHTML = opt.text; // LaTeX 포함
+    btn.onclick = () => checkAnswer(opt.isCorrect);
+    optionsContainer.appendChild(btn);
+  });
+
+  // MathJax 수식 다시 렌더링
+  MathJax.typeset();
+
+  // 시간제한(난이도 '하'가 아니면 타이머 시작)
+  if (timeLimitPerQuestion !== Infinity) {
+    questionTime = 0;
+    document.getElementById('energy-bar-container').classList.remove('hidden');
+    questionTimer = setInterval(()=>{
+      questionTime++;
+      let progress = (questionTime / timeLimitPerQuestion);
+      let percent = (1 - progress) * 100; 
+      document.getElementById('energy-bar').style.width = percent + "%";
+      if (progress >= 1) {
+        // 시간 초과
+        timeUp();
+      }
+    }, 1000);
+  } else {
+    // 하 난이도 -> 에너지바 숨김
+    document.getElementById('energy-bar-container').classList.add('hidden');
+  }
+}
+
+// 보기 셔플 로직: correctIndex가 있는 answers 배열을 랜덤 재배치
+// 반환 형식: [{text, isCorrect}, {text, isCorrect}, ...]
+function shuffleOptions(answersArr, correctIdx) {
+  // 만들 임시 배열
+  let result = [];
+  for (let i=0; i<answersArr.length; i++){
+    result.push({
+      text: answersArr[i],
+      isCorrect: (i === correctIdx)
+    });
+  }
+  // Fisher-Yates shuffle
+  for (let i = result.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [result[i], result[j]] = [result[j], result[i]];
+  }
+  return result;
+}
+
+// 아직 출제 안된 문제 중 랜덤 인덱스 골라내기
+function pickRandomUniqueIndex() {
+  let candidate = -1;
+  while (true) {
+    candidate = Math.floor(Math.random() * PROBLEMS.length);
+    if (!usedIndices.includes(candidate)) {
+      usedIndices.push(candidate);
+      return candidate;
+    }
+  }
+}
+
+// 정답 체크
+function checkAnswer(isCorrect) {
+  // 시간 타이머 중단
+  if (questionTimer) clearInterval(questionTimer);
+
+  if (isCorrect) {
+    // 정답
+    score += scorePerQuestion;
+    document.getElementById('score-span').innerText = "점수: " + score;
+    document.getElementById('feedback').innerText = "정답입니다! +"+scorePerQuestion+"점";
+  } else {
+    // 오답
+    chances--;
+    document.getElementById('chances').innerText = "남은 기회: " + chances;
+    // 정답 알려주기
+    const correctAnsText = currentProblem.answers[currentProblem.correctIndex];
+    document.getElementById('feedback').innerText = "틀렸습니다! 정답은: " + correctAnsText;
+
+    if (chances <= 0) {
+      gameOver();
+      return;
+    }
+  }
+
+  // 잠시(1초 정도) 기다렸다가 다음 문제로
+  setTimeout(()=>{
+    nextProblem();
+  }, 1000);
+}
+
+// 시간 초과 처리
+function timeUp() {
+  // 타이머 해제
+  if (questionTimer) clearInterval(questionTimer);
+  // 기회 차감
+  chances--;
+  document.getElementById('chances').innerText = "남은 기회: " + chances;
+  // 정답 표시
+  const correctAnsText = currentProblem.answers[currentProblem.correctIndex];
+  document.getElementById('feedback').innerText = 
+    "시간 초과! 정답은: " + correctAnsText;
+
+  if (chances <= 0) {
+    gameOver();
+    return;
+  }
+
+  // 1초 후 다음 문제
+  setTimeout(()=>{
+    nextProblem();
+  }, 1000);
+}
+
+function resetEnergyBar() {
+  if (questionTimer) clearInterval(questionTimer);
+  document.getElementById('energy-bar').style.width = "100%";
+}
+
+// 게임 종료
+function gameOver() {
+  // 화면 전환
+  if (questionTimer) clearInterval(questionTimer);
+  if (totalTimeInterval) clearInterval(totalTimeInterval);
+
+  document.getElementById('quiz-screen').classList.add('hidden');
+  document.getElementById('end-screen').classList.remove('hidden');
+  
+  document.getElementById('end-message').innerText = "게임 종료!";
+  document.getElementById('final-score').innerText = score;
+  document.getElementById('final-time').innerText = totalTime + "초";
+}
+
+// 점수 전송
+async function sendScore() {
+  // game, name, score, elapsedTime
+  const gameName = "여러 가지 일차 부등식의 풀이";
+  const playerScore = score;
+  const elapsedTime = totalTime;
+
+  // 서버로 데이터 전송
+  saveData(gameName, nameEntered, playerScore, elapsedTime);
+}
+
+/* 
+  ===========================
+  2) 서버 전송 함수 (주어진 코드)
+  ===========================
+*/
+function saveData(game, name, score, elapsedTime) {
+  const FUNCTION_URL = "https://us-central1-record-f420d.cloudfunctions.net/report";
+
+  const requestData = {
+    game,
+    name,
+    score: parseInt(score, 10),
+    elapsedTime: parseInt(elapsedTime, 10)
+  };
+
+  // fetch는 비동기 => async/await 또는 then 사용 가능
+  fetch(FUNCTION_URL, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify(requestData)
+  })
+  .then(async (response) => {
+    const responseData = await response.json();
+    if (response.ok) {
+      document.getElementById('response').innerText =
+        "성공: " + JSON.stringify(responseData, null, 2);
+    } else {
+      document.getElementById('response').innerText =
+        "오류: " + JSON.stringify(responseData, null, 2);
+    }
+  })
+  .catch((error) => {
+    console.error('요청 실패:', error);
+    document.getElementById('response').innerText =
+      "네트워크 오류: " + error.message;
+  });
+}
+</script>
+
+</body>
+</html>
